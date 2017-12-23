@@ -52,7 +52,7 @@ public class HomeActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        pref = PreferenceManager.getDefaultSharedPreferences(this);
+        pref = this.getPreferences(Context.MODE_PRIVATE);
         prefEditor = pref.edit();
 
         super.onCreate(savedInstanceState);
@@ -81,6 +81,7 @@ public class HomeActivity extends AppCompatActivity {
             }
         });
     }
+    //restart authentication process when app is restarted
     @Override
     protected void onRestart(){
         super.onRestart();
@@ -89,12 +90,12 @@ public class HomeActivity extends AppCompatActivity {
         startActivity(intent);
     }
 
+    //create AES key and store it safely using RSA(storeSecretKey function)
     public void createKeys() {
         try {
             if (!keyStore.containsAlias(MKEY)) {
                 final int outputKeyLength = 256;
                 SecureRandom secureRandom = new SecureRandom();
-                // Do *not* seed secureRandom! Automatically seeded from system entropy.
                 KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
                 keyGenerator.init(outputKeyLength, secureRandom);
                 SecretKey key = keyGenerator.generateKey();
@@ -105,9 +106,11 @@ public class HomeActivity extends AppCompatActivity {
         }
     }
 
+    //store AES key encrypted with RSA public key. RSA keys are stored in a keystore
     public void storeSecreteKey(SecretKey key){
         String alias = MKEY;
         try {
+            //generate RSA keys
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA","AndroidKeyStore");
 
             generator.initialize(new KeyGenParameterSpec.Builder(
@@ -117,17 +120,15 @@ public class HomeActivity extends AppCompatActivity {
                     .build());
             KeyPair keyPair = generator.generateKeyPair();
 
+            //encrypt AES key
             PublicKey publicKey = keyStore.getCertificate(MKEY).getPublicKey();
-
             Cipher input = Cipher.getInstance("RSA/ECB/OAEPWITHSHA-256ANDMGF1PADDING");
-
             input.init(Cipher.ENCRYPT_MODE, publicKey);
-
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             CipherOutputStream cipherOutputStream = new CipherOutputStream(outputStream, input);
             cipherOutputStream.write(key.getEncoded());
             cipherOutputStream.close();
-
+            //save encrypted AES key in SharedPreferences
             byte [] vals = outputStream.toByteArray();
             prefEditor.putString( AESKEY, Base64.encodeToString(vals, Base64.DEFAULT));
             prefEditor.commit();
@@ -136,12 +137,13 @@ public class HomeActivity extends AppCompatActivity {
             Toast.makeText(this, "Exception " + e.getMessage() + " occured", Toast.LENGTH_LONG).show();
         }
     }
-
+    //This method shows the alias of the key stored
     private void refreshKeys() {
         itemAliases = new ArrayList<>();
         try {
             Map<String, ?> allEntries = pref.getAll();
             for (Map.Entry<String, ?> entry : allEntries.entrySet()) {
+                //does not show AES key entry
                 if (!entry.getKey().contains(":"))
                     itemAliases.add(entry.getKey());
             }
@@ -211,15 +213,16 @@ public class HomeActivity extends AppCompatActivity {
     private void encryptAndInsertData(String textDomain, String textUser, String textPassword) {
 
         try {
+            //get encrypted AES key from Preferences
             String encryptedAesPassword = pref.getString(AESKEY, "");
             byte AESKey[] = Base64.decode(encryptedAesPassword, Base64.DEFAULT);
-            Cipher output = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+            //get RSA private key in order to decrypt AES key
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
             keyStore.load(null);
             PrivateKey privateKey = (PrivateKey) keyStore.getKey(MKEY, null);
-            output.init(Cipher.DECRYPT_MODE, privateKey);
-
-            CipherInputStream cipherInputStream = new CipherInputStream(new ByteArrayInputStream(AESKey), output);
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
+            CipherInputStream cipherInputStream = new CipherInputStream(new ByteArrayInputStream(AESKey), cipher);
             ArrayList<Byte> values = new ArrayList<>();
             int nextByte;
             while ((nextByte = cipherInputStream.read()) != -1) {
@@ -230,8 +233,10 @@ public class HomeActivity extends AppCompatActivity {
             for (int i = 0; i < bytes.length; i++) {
                 bytes[i] = values.get(i).byteValue();
             }
-
+            //get secret AES key from the plaintext obtained with RSA decryption
             SecretKey originalKeyEncrypted = new SecretKeySpec(bytes, 0, bytes.length, "AES");
+
+            //now use AES key to encrypt user's data
             Cipher c = null;
             c = Cipher.getInstance("AES/CBC/PKCS5Padding");
             SecureRandom random = new SecureRandom();
@@ -240,6 +245,7 @@ public class HomeActivity extends AppCompatActivity {
             IvParameterSpec ivectorSpecv = new IvParameterSpec(iv);
             c.init(Cipher.ENCRYPT_MODE, originalKeyEncrypted, ivectorSpecv);
             byte input[] = textPassword.getBytes();
+            //store username, IV(needed for decryption later) and encrypted password
             prefEditor.putString(textDomain, textUser);
             prefEditor.putString(textDomain + ":IV", Base64.encodeToString(iv, Base64.DEFAULT));
             prefEditor.putString(textDomain + ":" + textUser, Base64.encodeToString(c.doFinal(input), Base64.DEFAULT));
@@ -268,16 +274,13 @@ public class HomeActivity extends AppCompatActivity {
             String IV = pref.getString(domain+":IV", "");
 
             byte AESKey[] = Base64.decode(encryptedAesPassword, Base64.DEFAULT);
-
-            // rebuild key using SecretKeySpec
-
-            Cipher output = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
             KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
             keyStore.load(null);
             PrivateKey privateKey = (PrivateKey) keyStore.getKey(MKEY, null);
-            output.init(Cipher.DECRYPT_MODE, privateKey);
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
 
-            CipherInputStream cipherInputStream = new CipherInputStream(new ByteArrayInputStream(AESKey), output);
+            CipherInputStream cipherInputStream = new CipherInputStream(new ByteArrayInputStream(AESKey), cipher);
             ArrayList<Byte> values = new ArrayList<>();
             int nextByte;
             while ((nextByte = cipherInputStream.read()) != -1) {
@@ -288,17 +291,14 @@ public class HomeActivity extends AppCompatActivity {
             for (int i = 0; i < bytes.length; i++) {
                 bytes[i] = values.get(i).byteValue();
             }
-
+            //rebuild AES ket from bytes
             SecretKey originalKeyEncrypted = new SecretKeySpec(bytes, 0, bytes.length, "AES");
-
-             Cipher c = null;
-
-            //Key key = keyStore.getKey(MKEY, null);
+            //decrypt user data
+            Cipher c = null;
             c = Cipher.getInstance("AES/CBC/PKCS5Padding");
             IvParameterSpec ivectorSpecv = new IvParameterSpec(Base64.decode(IV, Base64.DEFAULT));
             c.init(Cipher.DECRYPT_MODE, originalKeyEncrypted, ivectorSpecv);
             byte input[] = Base64.decode(cipherText, Base64.DEFAULT);
-
             byte clearText[] = c.doFinal(input);
             return new String(clearText);
         } catch (Exception e) {
