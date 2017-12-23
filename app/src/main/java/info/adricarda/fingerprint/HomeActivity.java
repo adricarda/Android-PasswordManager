@@ -81,7 +81,7 @@ public class HomeActivity extends AppCompatActivity {
             }
         });
     }
-
+    @Override
     protected void onRestart(){
         super.onRestart();
         finish();
@@ -90,7 +90,6 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     public void createKeys() {
-
         try {
             if (!keyStore.containsAlias(MKEY)) {
                 final int outputKeyLength = 256;
