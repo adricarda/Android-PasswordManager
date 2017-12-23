@@ -9,15 +9,9 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.TextView;
-import java.security.KeyStore;
-import javax.crypto.Cipher;
 
 public class FingerprintActivity extends AppCompatActivity {
 
-    private KeyStore keyStore;
-    // Variable used for storing the key in the Android Keystore container
-    private static final String KEY_NAME = "androidHive";
-    private Cipher cipher;
     private TextView textView;
     private static final int LOCK_REQUEST_CODE = 221;
     private static final int SECURITY_SETTING_REQUEST_CODE = 233;
@@ -54,13 +48,6 @@ public class FingerprintActivity extends AppCompatActivity {
                         textView.setText("Lock screen security not enabled in Settings");
 
                     }else{
-                        // generateKey();
-//
-//                        if (cipherInit()) {
-//                            FingerprintManager.CryptoObject cryptoObject = new FingerprintManager.CryptoObject(cipher);
-//                            FingerprintHandler helper = new FingerprintHandler(this);
-//                            helper.startAuth(fingerprintManager, null);
-//
                         FingerprintHandler helper = new FingerprintHandler(this);
                         helper.startAuth(fingerprintManager, null);
                     }
