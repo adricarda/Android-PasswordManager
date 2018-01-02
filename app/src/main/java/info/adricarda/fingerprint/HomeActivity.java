@@ -234,20 +234,26 @@ public class HomeActivity extends AppCompatActivity {
                 bytes[i] = values.get(i).byteValue();
             }
             //get secret AES key from the plaintext obtained with RSA decryption
-            SecretKey originalKeyEncrypted = new SecretKeySpec(bytes, 0, bytes.length, "AES");
+            SecretKey originalAESKey = new SecretKeySpec(bytes, 0, bytes.length, "AES");
 
             //now use AES key to encrypt user's data
             Cipher c = null;
+            Cipher c2 = null;
+
             c = Cipher.getInstance("AES/CBC/PKCS5Padding");
+            c2 = Cipher.getInstance("AES/ECB/PKCS5Padding");
+
             SecureRandom random = new SecureRandom();
             iv = new byte[16];
             random.nextBytes(iv);
             IvParameterSpec ivectorSpecv = new IvParameterSpec(iv);
-            c.init(Cipher.ENCRYPT_MODE, originalKeyEncrypted, ivectorSpecv);
+            c.init(Cipher.ENCRYPT_MODE, originalAESKey, ivectorSpecv);
+            c2.init(Cipher.ENCRYPT_MODE, originalAESKey);
+
             byte input[] = textPassword.getBytes();
             //store username, IV(needed for decryption later) and encrypted password
             prefEditor.putString(textDomain, textUser);
-            prefEditor.putString(textDomain + ":IV", Base64.encodeToString(iv, Base64.DEFAULT));
+            prefEditor.putString(textDomain + ":IV", Base64.encodeToString(c2.doFinal(iv), Base64.DEFAULT));
             prefEditor.putString(textDomain + ":" + textUser, Base64.encodeToString(c.doFinal(input), Base64.DEFAULT));
             prefEditor.commit();
             refreshKeys();
@@ -291,13 +297,22 @@ public class HomeActivity extends AppCompatActivity {
             for (int i = 0; i < bytes.length; i++) {
                 bytes[i] = values.get(i).byteValue();
             }
-            //rebuild AES ket from bytes
-            SecretKey originalKeyEncrypted = new SecretKeySpec(bytes, 0, bytes.length, "AES");
+            //rebuild AES key from bytes
+            SecretKey originalAESKey = new SecretKeySpec(bytes, 0, bytes.length, "AES");
             //decrypt user data
             Cipher c = null;
+            Cipher c2 = null;
+
             c = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            IvParameterSpec ivectorSpecv = new IvParameterSpec(Base64.decode(IV, Base64.DEFAULT));
-            c.init(Cipher.DECRYPT_MODE, originalKeyEncrypted, ivectorSpecv);
+            c2 = Cipher.getInstance("AES/ECB/PKCS5Padding");
+
+            c2.init(Cipher.DECRYPT_MODE, originalAESKey);
+            byte encryptedIv[] = Base64.decode(IV, Base64.DEFAULT);
+            byte clearIV[] = c2.doFinal(encryptedIv);
+
+            IvParameterSpec ivectorSpecv = new IvParameterSpec(clearIV);
+
+            c.init(Cipher.DECRYPT_MODE, originalAESKey, ivectorSpecv);
             byte input[] = Base64.decode(cipherText, Base64.DEFAULT);
             byte clearText[] = c.doFinal(input);
             return new String(clearText);
