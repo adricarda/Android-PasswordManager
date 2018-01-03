@@ -14,7 +14,6 @@ public class FingerprintActivity extends AppCompatActivity {
 
     private TextView textView;
     private static final int LOCK_REQUEST_CODE = 221;
-    private static final int SECURITY_SETTING_REQUEST_CODE = 233;
     private KeyguardManager keyguardManager;
     FingerprintManager fingerprintManager;
 
